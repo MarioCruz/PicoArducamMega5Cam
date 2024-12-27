@@ -69,6 +69,7 @@ A web-based camera control interface for the Raspberry Pi Pico W with Arducam.
 - `camera.py`: Arducam camera driver
 - `config.py`: Configuration settings
 - `boot.py`: Boot configuration
+- `test_camera.py`: Simple Test
 
 ## Notes
 
