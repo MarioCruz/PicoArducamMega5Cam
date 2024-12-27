@@ -94,6 +94,3 @@ A web-based camera control interface for the Raspberry Pi Pico W with Arducam.
    - Reduce image resolution
    - Clear saved images
 
-## License
-
-MIT License - Feel free to use and modify as needed.
