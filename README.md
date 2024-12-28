@@ -98,6 +98,9 @@ A web-based camera control interface for the Raspberry Pi Pico W with Arducam.
    - Reduce image resolution
    - Clear saved images
 
+4. To run on bootup :
+   - Rename webserver.py to main.py
+
 ## UI
 <img width="537" alt="Screenshot 2024-12-28 at 11 29 00 AM" src="https://github.com/user-attachments/assets/f8cdf073-837b-40bb-aa43-7c9ff65cc3b4" />
 
