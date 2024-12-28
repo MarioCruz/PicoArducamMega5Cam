@@ -3,18 +3,19 @@ import network
 import machine
 import uos
 import gc
+import config
 from time import sleep, ticks_ms, ticks_diff, sleep_ms
 from camera import Camera
 from machine import Pin, SPI, RTC
 from webtemplate import HTML_PAGE
 
 # WiFi settings
-WIFI_SSID = "YourSSID"
-WIFI_PASSWORD = "YourPassword"
+WIFI_SSID = config.WIFI_SSID 
+WIFI_PASSWORD = config.WIFI_PASSWORD
 
 CHUNK_SIZE = 1024
 MAX_REQUEST_SIZE = 512
-MAX_SAVED_IMAGES = 3
+MAX_SAVED_IMAGES = config.MAX_SAVED_IMAGES
 
 class CameraManager:
     def __init__(self):
