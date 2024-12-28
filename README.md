@@ -104,6 +104,8 @@ A web-based camera control interface for the Raspberry Pi Pico W with Arducam.
 ## Acknowledgements 
 Used this video and repo to get most of the camera working on the Pico
 https://www.youtube.com/watch?v=M_b3kmnjF9Y
-camera.py from https://github.com/CoreElectronics/CE-Arducam-MicroPython/tree/main
+camera.py from https://github.com/CoreElectronics/CE-Arducam-MicroPython/
+Made some changes will submit a PR after more testing
+
 
 
