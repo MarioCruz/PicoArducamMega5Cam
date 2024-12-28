@@ -42,6 +42,7 @@ A web-based camera control interface for the Raspberry Pi Pico W with Arducam.
 1. Install the latest MicroPython firmware on your Pico W
 2. Copy all project files to your Pico W:
    - webserver.py (main web server)
+   - webtemplate.py (main Html web page)
    - camera.py (camera driver)
    - config.py (configuration)
    - boot.py (startup script)
@@ -70,6 +71,7 @@ A web-based camera control interface for the Raspberry Pi Pico W with Arducam.
 - `camera.py`: Arducam camera driver
 - `config.py`: Configuration settings
 - `boot.py`: Boot configuration
+-  `webtemplate.py ` (main web server Html)
 - `test_camera.py`: Simple Test
 
 ## Notes
