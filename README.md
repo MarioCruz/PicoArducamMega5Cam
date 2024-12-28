@@ -1,4 +1,4 @@
-# Raspberry Pi Pico W Camera Web Server
+# A web-based camera control interface for the Raspberry Pi Pico W with Arducam SPI 3 & 5mp.
 
 A web-based camera control interface for the Raspberry Pi Pico W with Arducam.
 
