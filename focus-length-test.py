@@ -3,6 +3,9 @@ from camera import Camera
 from machine import Pin, SPI
 import time
 
+def print_debug(message):
+    print(f"🔍 {message}")
+
 def initialize_camera():
     """Initialize and return camera instance"""
     spi = SPI(1, sck=Pin(10), mosi=Pin(15), miso=Pin(12), baudrate=8000000)
@@ -15,9 +18,13 @@ def ensure_directory(directory):
     try:
         if directory not in uos.listdir():
             uos.mkdir(directory)
-            print(f"Directory '{directory}' created")
+            print_debug(f"Directory '{directory}' created")
     except OSError as e:
-        print(f"Error creating directory '{directory}': {e}")
+        print_debug(f"Error creating directory '{directory}': {e}")
+
+def read_register(camera, addr):
+    """Read and return the value from the specified register"""
+    return int.from_bytes(camera._read_reg(addr), 'big')
 
 def capture_and_save_image(camera, filename):
     """Capture and save an image with the specified filename"""
@@ -59,7 +66,7 @@ def main():
         print(f"Setting resolution to: {resolution}")
         camera.resolution = resolution
 
-        # No focus
+        # No focus adjustment
         print("Capturing image with no focus adjustment...")
         capture_and_save_image(camera, f"{test_directory}/{resolution}_no_focus.jpg")
         
@@ -69,13 +76,19 @@ def main():
         capture_and_save_image(camera, f"{test_directory}/{resolution}_autofocus.jpg")
         camera.auto_focus(False)  # Turn off autofocus for subsequent tests
 
-        # Fixed focus at two different lengths
-        fixed_focus_lengths = [0x0020, 0x0050]
+        # Fixed focus at various lengths
+        fixed_focus_lengths = [0x0010, 0x0020, 0x0030, 0x0040, 0x0050, 0x0060, 0x0070, 0x0080]
         for length in fixed_focus_lengths:
             print(f"Setting fixed focus to 0x{length:04X}...")
             camera._write_reg(0x30, (length >> 8) & 0xFF)
             camera._write_reg(0x31, length & 0xFF)
             time.sleep(0.5)  # Give time for the focus position to change
+            
+            # Verify focus register values
+            focus_high = read_register(camera, 0x30)
+            focus_low = read_register(camera, 0x31)
+            actual_focus = (focus_high << 8) | focus_low
+            print(f"Focus register values after setting to 0x{length:04X}: 0x{actual_focus:04X}")
             
             filename = f"{test_directory}/{resolution}_fixed_focus_0x{length:04X}.jpg"
             capture_and_save_image(camera, filename)
