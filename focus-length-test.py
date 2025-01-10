@@ -26,8 +26,13 @@ def read_register(camera, addr):
     """Read and return the value from the specified register"""
     return int.from_bytes(camera._read_reg(addr), 'big')
 
+def write_register(camera, addr, value):
+    """Write a value to the specified register"""
+    camera._write_reg(addr, value)
+    time.sleep_ms(50)  # Allow time for the register to update
+
 def capture_and_save_image(camera, filename):
-    """Capture and save an image with the specified filename"""
+    """Capture and save an image with the specified filename, showing progress with dots"""
     try:
         # Ensure directory path
         dir_path = '/'.join(filename.split('/')[:-1])
@@ -43,9 +48,11 @@ def capture_and_save_image(camera, filename):
         
         print(f"Captured data length: {camera.received_length} bytes")
         
-        # Save the image
-        print(f"Saving image as {filename}...")
+        # Save the image with progress dots
+        print(f"Saving image as {filename}...", end="")
         camera.saveJPG(filename)
+        print("")  # New line after dots
+        
         size = uos.stat(filename)[6]
         print(f"Image saved as {filename} ({size} bytes)")
     except Exception as e:
@@ -65,6 +72,20 @@ def main():
         resolution = '1280x720'
         print(f"Setting resolution to: {resolution}")
         camera.resolution = resolution
+
+        # Adjust additional settings
+        print("Adjusting additional settings...")
+        # Example settings - these might need to be adjusted based on the camera's documentation and desired effect
+        exposure_value = 0x20  # Example exposure value
+        gain_value = 0x10      # Example gain value
+        white_balance_value = camera.WB_MODE_AUTO  # Example white balance mode
+        
+        write_register(camera, camera.CAM_REG_BRIGHTNESS_CONTROL, camera.BRIGHTNESS_DEFAULT)
+        write_register(camera, camera.CAM_REG_CONTRAST_CONTROL, camera.CONTRAST_DEFAULT)
+        write_register(camera, camera.CAM_REG_SATURATION_CONTROL, camera.SATURATION_DEFAULT)
+        write_register(camera, camera.CAM_REG_WB_MODE_CONTROL, white_balance_value)
+        write_register(camera, camera.CAM_REG_SENSOR_RESET, exposure_value)
+        write_register(camera, camera.CAM_REG_SENSOR_ID, gain_value)
 
         # No focus adjustment
         print("Capturing image with no focus adjustment...")
