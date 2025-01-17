@@ -143,10 +143,10 @@ class CameraManager:
                 
                 print(f"File save completed: {filename}")
                 
-                # Add to saved images list
-                self.saved_images.append(filename)
+                # Update saved images list
+                self.get_saved_images()  # This will refresh the list
                 
-                # Keep only last 3 images
+                # Keep only last MAX_SAVED_IMAGES images
                 while len(self.saved_images) > MAX_SAVED_IMAGES:
                     old_file = self.saved_images.pop(0)
                     try:
@@ -163,17 +163,25 @@ class CameraManager:
             print(f'Capture error: {e}')
             self.reset_camera()  # Try to recover camera
             return False
-    
+
     def get_saved_images(self):
         """Return list of saved images with their sizes"""
-        images = []
-        for filename in self.saved_images:
-            try:
-                size = uos.stat(filename)[6]
-                images.append({'name': filename, 'size': size})
-            except:
-                continue
-        return images
+        try:
+            images = []
+            # Scan root directory for jpg files
+            for filename in uos.listdir('/'):
+                if filename.lower().endswith('.jpg') and filename != 'temp.jpg':
+                    try:
+                        size = uos.stat(filename)[6]
+                        images.append({'name': filename, 'size': size})
+                    except:
+                        continue
+            # Update our internal list
+            self.saved_images = [img['name'] for img in images]
+            return images
+        except Exception as e:
+            print(f'Error getting saved images: {e}')
+            return []
             
     def set_resolution(self, resolution):
         try:
@@ -191,7 +199,7 @@ class CameraManager:
             print(f'Resolution error: {e}')
             self.reset_camera()
             return False
-            
+
     def set_white_balance(self, mode):
         try:
             print(f"Setting white balance to {mode}")
@@ -356,8 +364,125 @@ class CameraManager:
         except Exception as e:
             print(f'Exposure error: {e}')
             return False
+
+    def save_settings(self, preset_name):
+        try:
+            settings = {
+                'resolution': self.cam.resolution,
+                'white_balance': self.cam._read_reg(0x42),  # White balance register
+                'brightness': self.cam._read_reg(0x43),     # Brightness register
+                'contrast': self.cam._read_reg(0x44),       # Contrast register
+                'gain': self.cam._read_reg(0x45),          # Gain register
+                'exposure': self.cam._read_reg(0x55)        # Exposure register
+            }
             
-camera_manager = CameraManager()
+            # Create presets directory if it doesn't exist
+            try:
+                uos.mkdir('presets')
+            except:
+                pass
+                
+            # Save settings to file
+            filename = f'presets/{preset_name}.txt'
+            with open(filename, 'w') as f:
+                for key, value in settings.items():
+                    if isinstance(value, bytes):
+                        value = int.from_bytes(value, 'big')
+                    f.write(f'{key}={value}\n')
+            return True
+        except Exception as e:
+            print(f'Save settings error: {e}')
+            return False
+            
+    def load_settings(self, preset_name):
+        try:
+            filename = f'presets/{preset_name}.txt'
+            settings = {}
+            
+            # Read settings from file
+            with open(filename, 'r') as f:
+                for line in f:
+                    key, value = line.strip().split('=')
+                    settings[key] = value
+                    
+            # Apply settings
+            if 'resolution' in settings:
+                self.set_resolution(settings['resolution'])
+            if 'brightness' in settings:
+                self.set_brightness(settings['brightness'])
+            if 'contrast' in settings:
+                self.set_contrast(settings['contrast'])
+            if 'gain' in settings:
+                self.set_gain(settings['gain'])
+            if 'exposure' in settings:
+                self.set_exposure(settings['exposure'])
+                
+            return True
+        except Exception as e:
+            print(f'Load settings error: {e}')
+            return False
+            
+    def get_saved_presets(self):
+        try:
+            presets = []
+            try:
+                files = uos.listdir('presets')
+            except:
+                return []
+                
+            for file in files:
+                if file.endswith('.txt'):
+                    presets.append(file[:-4])  # Remove .txt extension
+            return presets
+        except Exception as e:
+            print(f'Get presets error: {e}')
+            return []
+            
+    def get_storage_info(self):
+        try:
+            # Get filesystem information
+            fs_info = uos.statvfs('/')
+            block_size = fs_info[0]
+            total_blocks = fs_info[2]
+            free_blocks = fs_info[3]
+            
+            # Calculate sizes in bytes
+            total_space = block_size * total_blocks
+            free_space = block_size * free_blocks
+            used_space = total_space - free_space
+            
+            # Convert to KB since Pico storage is small
+            def human_size(size):
+                if size < 1024:
+                    return f"{size} B"
+                elif size < 1024 * 1024:
+                    return f"{size/1024:.1f} KB"
+                else:
+                    return f"{size/(1024*1024):.1f} MB"  # Max size will be in MB for Pico
+            
+            # Get actual count of jpg files (excluding temp.jpg)
+            image_count = 0
+            try:
+                for filename in uos.listdir('/'):
+                    if filename.lower().endswith('.jpg') and filename != 'temp.jpg':
+                        image_count += 1
+            except:
+                pass
+                
+            return {
+                'total': human_size(total_space),
+                'used': human_size(used_space),
+                'free': human_size(free_space),
+                'images': image_count
+            }
+        except Exception as e:
+            print(f'Storage info error: {e}')
+            return {
+                'total': 'Unknown',
+                'used': 'Unknown',
+                'free': 'Unknown',
+                'images': 0
+            }
 
 def handle_request(client):
     try:
@@ -453,21 +578,27 @@ def handle_request(client):
                 client.send('HTTP/1.1 200 OK\r\n\r\n')
             else:
                 client.send('HTTP/1.1 500 Internal Server Error\r\n\r\n')
-        
-        elif path == '/fixedfocus':
-            if camera_manager.set_fixed_focus(param):
+                
+        elif path == '/save_preset':
+            if camera_manager.save_settings(param):
                 client.send('HTTP/1.1 200 OK\r\n\r\n')
             else:
                 client.send('HTTP/1.1 500 Internal Server Error\r\n\r\n')
-        elif path == '/exposure':
-            if camera_manager.set_exposure(param):
+                
+        elif path == '/load_preset':
+            if camera_manager.load_settings(param):
                 client.send('HTTP/1.1 200 OK\r\n\r\n')
             else:
                 client.send('HTTP/1.1 500 Internal Server Error\r\n\r\n')
-
-        elif path == '/gain':
-            if camera_manager.set_gain(param):
-                client.send('HTTP/1.1 200 OK\r\n\r\n')
+                
+        elif path == '/list_presets':
+            presets = camera_manager.get_saved_presets()
+            send_json(client, presets)
+            
+        elif path == '/storage_info':
+            info = camera_manager.get_storage_info()
+            if info:
+                send_json(client, info)
             else:
                 client.send('HTTP/1.1 500 Internal Server Error\r\n\r\n')
         else:
@@ -552,4 +683,6 @@ def start_server():
                 pass
 
 if __name__ == '__main__':
+    camera_manager = CameraManager()
     start_server()
+
