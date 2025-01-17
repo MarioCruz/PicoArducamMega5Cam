@@ -287,6 +287,39 @@ HTML_PAGE = """<!DOCTYPE html><html>
             max-width: 200px;
         }
 
+        .debug-log {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: var(--border-radius);
+            border: 1px solid #e9ecef;
+        }
+        
+        .debug-log h3 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+        
+        #debug-messages {
+            font-family: monospace;
+            background: #2b2b2b;
+            color: #f8f8f8;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .debug-message {
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #3d3d3d;
+        }
+        
+        .debug-message:last-child {
+            border-bottom: none;
+        }
+
         @media (max-width: 768px) {
             .main-container {
                 padding: 15px;
@@ -511,6 +544,27 @@ HTML_PAGE = """<!DOCTYPE html><html>
         }
 
         // Initial load with event handlers
+
+        function addDebugMessage(message) {
+            const debugMessages = document.getElementById('debug-messages');
+            const messageElement = document.createElement('div');
+            messageElement.className = 'debug-message';
+            messageElement.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
+            debugMessages.insertBefore(messageElement, debugMessages.firstChild);
+            
+            // Keep only last 50 messages
+            while (debugMessages.children.length > 50) {
+                debugMessages.removeChild(debugMessages.lastChild);
+            }
+        }
+
+        // Update status function to also log to debug
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = type;
+            addDebugMessage(`${type.toUpperCase()}: ${message}`);
+        }
         document.addEventListener('DOMContentLoaded', function() {
             updateSavedImages();
             capture();
@@ -540,6 +594,19 @@ HTML_PAGE = """<!DOCTYPE html><html>
                     <span class="slider"></span>
                 </label>
                 <button class="focus-button" onclick="singleFocus()">Single Focus</button>
+            </div>
+            <div class="control-group">
+                <label>Fixed Focus:</label>
+                <select id="focus-length" onchange="setControl('fixedfocus', this.value)">
+                    <option value="0x0010">Length 0x0010</option>
+                    <option value="0x0020">Length 0x0020</option>
+                    <option value="0x0030">Length 0x0030</option>
+                    <option value="0x0040">Length 0x0040</option>
+                    <option value="0x0050">Length 0x0050</option>
+                    <option value="0x0060">Length 0x0060</option>
+                    <option value="0x0070">Length 0x0070</option>
+                    <option value="0x0080">Length 0x0080</option>
+                </select>
             </div>
         </div>
 
@@ -604,6 +671,29 @@ HTML_PAGE = """<!DOCTYPE html><html>
                 <option value="6">-3</option>
             </select>
         </div>
+        <div class="control-group">
+            <label>Exposure:</label>
+            <select onchange="setControl('exposure', this.value)">
+                <option value="0x10">Very Low</option>
+                <option value="0x20">Low</option>
+                <option value="0x30">Medium Low</option>
+                <option value="0x40">Medium</option>
+                <option value="0x50">Medium High</option>
+                <option value="0x60">High</option>
+                <option value="0x70">Very High</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label>Gain:</label>
+            <select onchange="setControl('gain', this.value)">
+                <option value="0x10">Low</option>
+                <option value="0x20">Medium Low</option>
+                <option value="0x30">Medium</option>
+                <option value="0x40">Medium High</option>
+                <option value="0x50">High</option>
+            </select>
+        </div>
     </div>
 
     <div class="button-group">
@@ -613,7 +703,12 @@ HTML_PAGE = """<!DOCTYPE html><html>
     
     <div id="status">Ready</div>
     <div id="saved-images" class="saved-images"></div>
+    <div class="debug-log">
+        <h3>Debug Log</h3>
+        <div id="debug-messages"></div>
+    </div>
     <img id="photo" alt="Camera Output">
 </div>
 </body>
-</html>"""
+</html>
+"""

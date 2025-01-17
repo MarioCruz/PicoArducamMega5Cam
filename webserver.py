@@ -297,6 +297,66 @@ class CameraManager:
             self.reset_camera()
             return False
 
+    def set_fixed_focus(self, focus_value):
+        try:
+            if not self.verify_camera():
+                raise Exception("Camera not ready")
+                
+            focus_value = int(focus_value, 16)
+            print(f"Setting fixed focus to 0x{focus_value:04X}")
+            self.cam._write_reg(0x30, (focus_value >> 8) & 0xFF)
+            self.cam._write_reg(0x31, focus_value & 0xFF)
+            sleep(0.5)  # Give time for the focus position to change
+
+            # Verify focus register values
+            focus_high = self.cam._read_reg(0x30)
+            focus_low = self.cam._read_reg(0x31)
+            actual_focus = (int.from_bytes(focus_high, 'big') << 8) | int.from_bytes(focus_low, 'big')
+            print(f"Focus register values set to 0x{actual_focus:04X}")
+            
+            return True
+        except Exception as e:
+            print(f'Fixed focus error: {e}')
+            return False
+
+    def set_gain(self, gain_value):
+        try:
+            if not self.verify_camera():
+                raise Exception("Camera not ready")
+                
+            gain_value = int(gain_value, 16)
+            print(f"Setting gain to 0x{gain_value:02X}")
+            self.cam._write_reg(0x45, gain_value)  # Assuming 0x45 is the gain register
+            sleep(0.5)  # Give time for the gain to adjust
+            
+            # Verify gain register value
+            actual_gain = int.from_bytes(self.cam._read_reg(0x45), 'big')
+            print(f"Gain register value set to 0x{actual_gain:02X}")
+            
+            return True
+        except Exception as e:
+            print(f'Gain error: {e}')
+            return False
+
+    def set_exposure(self, exposure_value):
+        try:
+            if not self.verify_camera():
+                raise Exception("Camera not ready")
+                
+            exposure_value = int(exposure_value, 16)
+            print(f"Setting exposure to 0x{exposure_value:02X}")
+            self.cam._write_reg(0x55, exposure_value)  # Assuming 0x55 is the exposure register
+            sleep(0.5)  # Give time for the exposure to adjust
+            
+            # Verify exposure register value
+            actual_exposure = int.from_bytes(self.cam._read_reg(0x55), 'big')
+            print(f"Exposure register value set to 0x{actual_exposure:02X}")
+            
+            return True
+        except Exception as e:
+            print(f'Exposure error: {e}')
+            return False
+            
 camera_manager = CameraManager()
 
 def handle_request(client):
@@ -375,7 +435,41 @@ def handle_request(client):
                 client.send('HTTP/1.1 200 OK\r\n\r\n')
             else:
                 client.send('HTTP/1.1 500 Internal Server Error\r\n\r\n')
+
+        elif path == '/fixedfocus':
+            if camera_manager.set_fixed_focus(param):
+                client.send('HTTP/1.1 200 OK\r\n\r\n')
+            else:
+                client.send('HTTP/1.1 500 Internal Server Error\r\n\r\n')
+
+        elif path == '/gain':
+            if camera_manager.set_gain(param):
+                client.send('HTTP/1.1 200 OK\r\n\r\n')
+            else:
+                client.send('HTTP/1.1 500 Internal Server Error\r\n\r\n')
+
+        elif path == '/exposure':
+            if camera_manager.set_exposure(param):
+                client.send('HTTP/1.1 200 OK\r\n\r\n')
+            else:
+                client.send('HTTP/1.1 500 Internal Server Error\r\n\r\n')
         
+        elif path == '/fixedfocus':
+            if camera_manager.set_fixed_focus(param):
+                client.send('HTTP/1.1 200 OK\r\n\r\n')
+            else:
+                client.send('HTTP/1.1 500 Internal Server Error\r\n\r\n')
+        elif path == '/exposure':
+            if camera_manager.set_exposure(param):
+                client.send('HTTP/1.1 200 OK\r\n\r\n')
+            else:
+                client.send('HTTP/1.1 500 Internal Server Error\r\n\r\n')
+
+        elif path == '/gain':
+            if camera_manager.set_gain(param):
+                client.send('HTTP/1.1 200 OK\r\n\r\n')
+            else:
+                client.send('HTTP/1.1 500 Internal Server Error\r\n\r\n')
         else:
             client.send('HTTP/1.1 404 Not Found\r\n\r\n')
             
@@ -458,5 +552,4 @@ def start_server():
                 pass
 
 if __name__ == '__main__':
-    
     start_server()
