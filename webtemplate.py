@@ -1,6 +1,4 @@
-"""
-Web template for camera server - Version 0.9
-"""
+"""Web template for camera server - Version 0.9"""
 
 HTML_PAGE = """<!DOCTYPE html><html>
 <head>
@@ -294,12 +292,12 @@ HTML_PAGE = """<!DOCTYPE html><html>
             border-radius: var(--border-radius);
             border: 1px solid #e9ecef;
         }
-        
+
         .debug-log h3 {
             color: var(--primary-color);
             margin-bottom: 10px;
         }
-        
+
         #debug-messages {
             font-family: monospace;
             background: #2b2b2b;
@@ -309,15 +307,69 @@ HTML_PAGE = """<!DOCTYPE html><html>
             max-height: 200px;
             overflow-y: auto;
         }
-        
+
         .debug-message {
             margin: 5px 0;
             padding: 5px;
             border-bottom: 1px solid #3d3d3d;
         }
-        
+
         .debug-message:last-child {
             border-bottom: none;
+        }
+
+        .settings-panel {
+            background: #fff;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        .settings-panel h3 {
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+
+        .preset-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .preset-buttons button {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .storage-info {
+            background: #fff;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        .storage-info h3 {
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+
+        .storage-info p {
+            margin: 10px 0;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: var(--border-radius);
+        }
+
+        #preset-name {
+            padding: 10px;
+            margin: 5px;
+            border-radius: var(--border-radius);
+            border: 1px solid #ddd;
+            width: 200px;
         }
 
         @media (max-width: 768px) {
@@ -342,6 +394,18 @@ HTML_PAGE = """<!DOCTYPE html><html>
             .button-group button {
                 max-width: none;
             }
+
+            .preset-buttons {
+                flex-direction: column;
+            }
+
+            .preset-buttons button {
+                width: 100%;
+            }
+
+            #preset-name {
+                width: 100%;
+            }
         }
     </style>
     <script>
@@ -359,6 +423,26 @@ HTML_PAGE = """<!DOCTYPE html><html>
             const status = document.getElementById('status');
             status.textContent = message;
             status.className = type;
+            addDebugMessage(`${type.toUpperCase()}: ${message}`);
+        }
+
+        function updateStorageInfo() {
+            fetch('/storage_info')
+                .then(response => response.json())
+                .then(data => {
+                    const storageDetails = document.getElementById('storage-details');
+                    storageDetails.innerHTML = `
+                        <p>Total Space: ${data.total}</p>
+                        <p>Used Space: ${data.used}</p>
+                        <p>Free Space: ${data.free}</p>
+                        <p>Saved Images: ${data.images}</p>
+                    `;
+                    addDebugMessage('Storage info updated successfully');
+                })
+                .catch(error => {
+                    document.getElementById('storage-details').innerHTML = 'Error loading storage information';
+                    addDebugMessage('Error updating storage info: ' + error.message);
+                });
         }
 
         function enableButtons(enable = true) {
@@ -473,6 +557,8 @@ HTML_PAGE = """<!DOCTYPE html><html>
             })
             .then(blob => {
                 updateSavedImages();
+                updatePresetList();
+                updateStorageInfo();
                 const url = URL.createObjectURL(blob);
                 const img = document.getElementById('photo');
                 img.onload = () => {
@@ -512,7 +598,10 @@ HTML_PAGE = """<!DOCTYPE html><html>
                         container.appendChild(div);
                     });
                 })
-                .catch(error => console.error('Error updating saved images:', error));
+                .catch(error => {
+                    console.error('Error updating saved images:', error);
+                    addDebugMessage('Error updating saved images: ' + error.message);
+                });
         }
 
         function viewImage(filename) {
@@ -543,8 +632,6 @@ HTML_PAGE = """<!DOCTYPE html><html>
             return (bytes / 1048576).toFixed(1) + ' MB';
         }
 
-        // Initial load with event handlers
-
         function addDebugMessage(message) {
             const debugMessages = document.getElementById('debug-messages');
             const messageElement = document.createElement('div');
@@ -552,163 +639,293 @@ HTML_PAGE = """<!DOCTYPE html><html>
             messageElement.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
             debugMessages.insertBefore(messageElement, debugMessages.firstChild);
             
-            // Keep only last 50 messages
             while (debugMessages.children.length > 50) {
                 debugMessages.removeChild(debugMessages.lastChild);
             }
         }
 
-        // Update status function to also log to debug
-        function updateStatus(message, type = 'info') {
-            const status = document.getElementById('status');
-            status.textContent = message;
-            status.className = type;
-            addDebugMessage(`${type.toUpperCase()}: ${message}`);
+        function savePreset() {
+            const name = document.getElementById('preset-name').value.trim();
+            if (!name) {
+                updateStatus('Please enter a preset name', 'error');
+                return;
+            }
+            
+            fetch('/save_preset?' + encodeURIComponent(name))
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to save preset');
+                    updateStatus('Preset saved: ' + name, 'success');
+                    updatePresetList();
+                })
+                .catch(error => updateStatus('Error: ' + error.message, 'error'));
         }
+        
+        function loadPreset(name) {
+            if (!name) return;
+            
+            updateStatus('Loading preset: ' + name, 'warning');
+            fetch('/load_preset?' + encodeURIComponent(name))
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to load preset');
+                    updateStatus('Preset loaded: ' + name, 'success');
+                    setTimeout(() => capture(true), 1000);
+                })
+                .catch(error => updateStatus('Error: ' + error.message, 'error'));
+        }
+        
+        function updatePresetList() {
+            fetch('/list_presets')
+                .then(response => response.json())
+                .then(presets => {
+                    const select = document.getElementById('preset-select');
+                    select.innerHTML = '<option value="">Select a preset...</option>';
+                    presets.forEach(preset => {
+                        const option = document.createElement('option');
+                        option.value = preset;
+                        option.textContent = preset;
+                        select.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error updating presets:', error);
+                    addDebugMessage('Error updating presets: ' + error.message);
+                });
+        }
+        
+        function applyPreset(type) {
+            const presets = {
+                indoor: {
+                    wb: 'office',
+                    brightness: '0',
+                    contrast: '0',
+                    exposure: '0x30'
+                },
+                outdoor: {
+                    wb: 'sunny',
+                    brightness: '2',
+                    contrast: '1',
+                    exposure: '0x20'
+                },
+                lowlight: {
+                    wb: 'home',
+                    brightness: '1',
+                    contrast: '2',
+                    exposure: '0x50',
+                    gain: '0x40'
+                },
+                bright: {
+                    wb: 'sunny',
+                    brightness: '2',
+                    contrast: '3',
+                    exposure: '0x20',
+                    gain: '0x10'
+                }
+            };
+            
+            const preset = presets[type];
+            if (!preset) return;
+            
+            updateStatus('Applying ' + type + ' preset...', 'warning');
+            
+            Promise.all([
+                fetch('/whitebalance?' + preset.wb),
+                fetch('/brightness?' + preset.brightness),
+                fetch('/contrast?' + preset.contrast),
+                fetch('/exposure?' + preset.exposure),
+                preset.gain ? fetch('/gain?' + preset.gain) : Promise.resolve()
+            ])
+            .then(() => {
+                updateStatus(type + ' preset applied', 'success');
+                setTimeout(() => capture(true), 1000);
+            })
+            .catch(error => updateStatus('Error applying preset: ' + error.message, 'error'));
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             updateSavedImages();
+            updatePresetList();
+            updateStorageInfo();
             capture();
 
-            // Update saved images list every 5 seconds if not busy
             setInterval(() => {
                 if (!busy) {
                     updateSavedImages();
+                    updatePresetList();
+                    updateStorageInfo();
                 }
             }, 5000);
         });
     </script>
 </head>
 <body>
-<div class="main-container">
-    <div class="header">
-        <h1>Camera Capture v0.9</h1>
-        <p>Advanced Camera Control Interface</p>
-    </div>
+    <div class="main-container">
+        <div class="header">
+            <h1>Camera Capture v0.9</h1>
+            <p>Advanced Camera Control Interface</p>
+        </div>
 
-    <div class="controls">
-        <div class="focus-controls">
-            <div class="control-group">
-                <label>Auto Focus:</label>
-                <label class="switch">
-                    <input type="checkbox" id="autofocus" onchange="toggleAutoFocus()">
-                    <span class="slider"></span>
-                </label>
-                <button class="focus-button" onclick="singleFocus()">Single Focus</button>
+        <div class="controls">
+            <div class="focus-controls">
+                <div class="control-group">
+                    <label>Auto Focus:</label>
+                    <label class="switch">
+                        <input type="checkbox" id="autofocus" onchange="toggleAutoFocus()">
+                        <span class="slider"></span>
+                    </label>
+                    <button class="focus-button" onclick="singleFocus()">Single Focus</button>
+                </div>
+                <div class="control-group">
+                    <label>Fixed Focus:</label>
+                    <select id="focus-length" onchange="setControl('fixedfocus', this.value)">
+                        <option value="0x0010">Macro (~5cm)</option>
+                        <option value="0x0020">Super Close-up (~10cm)</option>
+                        <option value="0x0030">Close-up (~20cm)</option>
+                        <option value="0x0040">Desktop Distance (~50cm)</option>
+                        <option value="0x0050">Room Distance (~1m)</option>
+                        <option value="0x0060">Far Distance (~3m)</option>
+                        <option value="0x0070">Very Far (~5m)</option>
+                        <option value="0x0080">Infinity (∞)</option>
+                    </select>
+                </div>
             </div>
+
             <div class="control-group">
-                <label>Fixed Focus:</label>
-                <select id="focus-length" onchange="setControl('fixedfocus', this.value)">
-                    <option value="0x0010">Length 0x0010</option>
-                    <option value="0x0020">Length 0x0020</option>
-                    <option value="0x0030">Length 0x0030</option>
-                    <option value="0x0040">Length 0x0040</option>
-                    <option value="0x0050">Length 0x0050</option>
-                    <option value="0x0060">Length 0x0060</option>
-                    <option value="0x0070">Length 0x0070</option>
-                    <option value="0x0080">Length 0x0080</option>
+                <label>Resolution:</label>
+                <select onchange="setControl('resolution', this.value)">
+                    <option value="640x480">640x480</option>
+                    <option value="1280x720">720p</option>
+                    <option value="1920x1080">1080p</option>
+                    <option value="2048x1536">2048x1536</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>White Balance:</label>
+                <select onchange="setControl('whitebalance', this.value)">
+                    <option value="auto">Auto</option>
+                    <option value="sunny">Sunny</option>
+                    <option value="cloudy">Cloudy</option>
+                    <option value="office">Office</option>
+                    <option value="home">Home</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Brightness:</label>
+                <select onchange="setControl('brightness', this.value)">
+                    <option value="0">Default</option>
+                    <option value="1">+1</option>
+                    <option value="3">+2</option>
+                    <option value="5">+3</option>
+                    <option value="7">+4</option>
+                    <option value="2">-1</option>
+                    <option value="4">-2</option>
+                    <option value="6">-3</option>
+                    <option value="8">-4</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Contrast:</label>
+                <select onchange="setControl('contrast', this.value)">
+                    <option value="0">Default</option>
+                    <option value="1">+1</option>
+                    <option value="3">+2</option>
+                    <option value="5">+3</option>
+                    <option value="2">-1</option>
+                    <option value="4">-2</option>
+                    <option value="6">-3</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Saturation:</label>
+                <select onchange="setControl('saturation', this.value)">
+                    <option value="0">Default</option>
+                    <option value="1">+1</option>
+                    <option value="3">+2</option>
+                    <option value="5">+3</option>
+                    <option value="2">-1</option>
+                    <option value="4">-2</option>
+                    <option value="6">-3</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Exposure:</label>
+                <select onchange="setControl('exposure', this.value)">
+                    <option value="0x10">Very Low</option>
+                    <option value="0x20">Low</option>
+                    <option value="0x30">Medium Low</option>
+                    <option value="0x40">Medium</option>
+                    <option value="0x50">Medium High</option>
+                    <option value="0x60">High</option>
+                    <option value="0x70">Very High</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Gain:</label>
+                <select onchange="setControl('gain', this.value)">
+                    <option value="0x10">Low</option>
+                    <option value="0x20">Medium Low</option>
+                    <option value="0x30">Medium</option>
+                    <option value="0x40">Medium High</option>
+                    <option value="0x50">High</option>
                 </select>
             </div>
         </div>
 
-        <div class="control-group">
-            <label>Resolution:</label>
-            <select onchange="setControl('resolution', this.value)">
-                <option value="640x480">640x480</option>
-                <option value="1280x720">720p</option>
-                <option value="1920x1080">1080p</option>
-                <option value="2048x1536">2048x1536</option>
-            </select>
+        <div class="button-group">
+            <button onclick="capture()">Capture</button>
+            <button onclick="captureAndSave()">Capture & Save</button>
         </div>
         
-        <div class="control-group">
-            <label>White Balance:</label>
-            <select onchange="setControl('whitebalance', this.value)">
-                <option value="auto">Auto</option>
-                <option value="sunny">Sunny</option>
-                <option value="cloudy">Cloudy</option>
-                <option value="office">Office</option>
-                <option value="home">Home</option>
-            </select>
-        </div>
+        <div id="status">Ready</div>
         
-        <div class="control-group">
-            <label>Brightness:</label>
-            <select onchange="setControl('brightness', this.value)">
-                <option value="0">Default</option>
-                <option value="1">+1</option>
-                <option value="3">+2</option>
-                <option value="5">+3</option>
-                <option value="7">+4</option>
-                <option value="2">-1</option>
-                <option value="4">-2</option>
-                <option value="6">-3</option>
-                <option value="8">-4</option>
-            </select>
+        <div class="storage-info">
+            <h3>Storage Information</h3>
+            <div id="storage-details">
+                Loading storage information...
+            </div>
         </div>
-        
-        <div class="control-group">
-            <label>Contrast:</label>
-            <select onchange="setControl('contrast', this.value)">
-                <option value="0">Default</option>
-                <option value="1">+1</option>
-                <option value="3">+2</option>
-                <option value="5">+3</option>
-                <option value="2">-1</option>
-                <option value="4">-2</option>
-                <option value="6">-3</option>
-            </select>
-        </div>
-        
-        <div class="control-group">
-            <label>Saturation:</label>
-            <select onchange="setControl('saturation', this.value)">
-                <option value="0">Default</option>
-                <option value="1">+1</option>
-                <option value="3">+2</option>
-                <option value="5">+3</option>
-                <option value="2">-1</option>
-                <option value="4">-2</option>
-                <option value="6">-3</option>
-            </select>
-        </div>
-        <div class="control-group">
-            <label>Exposure:</label>
-            <select onchange="setControl('exposure', this.value)">
-                <option value="0x10">Very Low</option>
-                <option value="0x20">Low</option>
-                <option value="0x30">Medium Low</option>
-                <option value="0x40">Medium</option>
-                <option value="0x50">Medium High</option>
-                <option value="0x60">High</option>
-                <option value="0x70">Very High</option>
-            </select>
-        </div>
-        
-        <div class="control-group">
-            <label>Gain:</label>
-            <select onchange="setControl('gain', this.value)">
-                <option value="0x10">Low</option>
-                <option value="0x20">Medium Low</option>
-                <option value="0x30">Medium</option>
-                <option value="0x40">Medium High</option>
-                <option value="0x50">High</option>
-            </select>
-        </div>
-    </div>
 
-    <div class="button-group">
-        <button onclick="capture()">Capture</button>
-        <button onclick="captureAndSave()">Capture & Save</button>
+        <div class="settings-panel">
+            <h3>Quick Settings</h3>
+            <div class="control-group">
+                <label>Save Current Settings:</label>
+                <input type="text" id="preset-name" placeholder="Preset name">
+                <button onclick="savePreset()">Save</button>
+            </div>
+            <div class="control-group">
+                <label>Load Preset:</label>
+                <select id="preset-select" onchange="loadPreset(this.value)">
+                    <option value="">Select a preset...</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="settings-panel">
+            <h3>Image Presets</h3>
+            <div class="preset-buttons">
+                <button onclick="applyPreset('indoor')">Indoor</button>
+                <button onclick="applyPreset('outdoor')">Outdoor</button>
+                <button onclick="applyPreset('lowlight')">Low Light</button>
+                <button onclick="applyPreset('bright')">Bright Day</button>
+            </div>
+        </div>
+
+        <div class="debug-log">
+            <h3>Debug Log</h3>
+            <div id="debug-messages"></div>
+        </div>
+
+        <div id="saved-images" class="saved-images">
+            <h3>Saved Images:</h3>
+        </div>
+
+        <img id="photo" alt="Camera Output">
     </div>
-    
-    <div id="status">Ready</div>
-    <div id="saved-images" class="saved-images"></div>
-    <div class="debug-log">
-        <h3>Debug Log</h3>
-        <div id="debug-messages"></div>
-    </div>
-    <img id="photo" alt="Camera Output">
-</div>
 </body>
 </html>
 """
