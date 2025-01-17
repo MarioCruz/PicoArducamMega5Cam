@@ -1,4 +1,4 @@
-"""Web template for camera server - Version 0.9"""
+"""Web template for camera server - Version 0.999"""
 
 HTML_PAGE = """<!DOCTYPE html><html>
 <head>
