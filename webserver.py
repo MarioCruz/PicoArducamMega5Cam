@@ -25,6 +25,7 @@ class CameraManager:
         self.rtc = RTC()
         self.spi = None
         self.cs = None
+        self.last_storage_info = None
         self.initialize_camera()
         
     def get_timestamp(self):
@@ -35,7 +36,6 @@ class CameraManager:
     def initialize_camera(self):
         try:
             print("Initializing camera...")
-            # Clean up old instances if they exist
             if self.cam:
                 del self.cam
             if self.spi:
@@ -43,14 +43,12 @@ class CameraManager:
             if self.cs:
                 self.cs.value(1)
                 
-            # Create new instances
             self.spi = SPI(1, sck=Pin(10), mosi=Pin(15), miso=Pin(12), baudrate=8000000)
             self.cs = Pin(13, Pin.OUT)
             self.cs.high()
             
-            # Initialize camera
             self.cam = Camera(self.spi, self.cs, skip_sleep=False)
-            sleep(2)  # Give camera time to stabilize
+            sleep(2)
             self.cam.resolution = '640x480'
             print("Camera initialized successfully")
             return True
@@ -60,7 +58,6 @@ class CameraManager:
             return False
 
     def cleanup(self):
-        """Clean up camera resources"""
         try:
             if self.cam:
                 del self.cam
@@ -75,18 +72,15 @@ class CameraManager:
             print(f"Cleanup error: {e}")
 
     def reset_camera(self):
-        """Reset camera completely"""
         print("Resetting camera...")
         self.cleanup()
-        sleep(2)  # Give more time for reset
+        sleep(2)
         return self.initialize_camera()
 
     def verify_camera(self):
-        """Verify camera is working and reset if needed"""
         try:
             if not self.cam:
                 return self.initialize_camera()
-            # Try a test capture to verify camera is working
             self.cam.capture_jpg()
             return True
         except:
@@ -119,17 +113,14 @@ class CameraManager:
                     else:
                         raise Exception("Failed to capture after 3 attempts")
 
-            # Verify the file exists and has size
             size = uos.stat('temp.jpg')[6]
             print(f'Temporary image saved: {size} bytes')
             
-            # If save is requested, copy to a new file with timestamp
             if save:
                 timestamp = self.get_timestamp()
                 filename = f"img_{timestamp}.jpg"
                 print(f"Creating permanent save file: {filename}")
                 
-                # Copy temp.jpg to new file with progress
                 total_bytes = 0
                 with open('temp.jpg', 'rb') as src, open(filename, 'wb') as dst:
                     while True:
@@ -142,11 +133,8 @@ class CameraManager:
                         print(f"Save progress: {progress:.1f}% ({total_bytes}/{size} bytes)")
                 
                 print(f"File save completed: {filename}")
+                self.get_saved_images()
                 
-                # Update saved images list
-                self.get_saved_images()  # This will refresh the list
-                
-                # Keep only last MAX_SAVED_IMAGES images
                 while len(self.saved_images) > MAX_SAVED_IMAGES:
                     old_file = self.saved_images.pop(0)
                     try:
@@ -156,19 +144,20 @@ class CameraManager:
                     except:
                         print(f'Failed to remove: {old_file}')
                 
+                # Update storage info after saving
+                self.last_storage_info = self.get_storage_info()
+                
                 print(f'Save operation completed: {filename}')
             
             return True
         except Exception as e:
             print(f'Capture error: {e}')
-            self.reset_camera()  # Try to recover camera
+            self.reset_camera()
             return False
 
     def get_saved_images(self):
-        """Return list of saved images with their sizes"""
         try:
             images = []
-            # Scan root directory for jpg files
             for filename in uos.listdir('/'):
                 if filename.lower().endswith('.jpg') and filename != 'temp.jpg':
                     try:
@@ -176,12 +165,51 @@ class CameraManager:
                         images.append({'name': filename, 'size': size})
                     except:
                         continue
-            # Update our internal list
             self.saved_images = [img['name'] for img in images]
             return images
         except Exception as e:
             print(f'Error getting saved images: {e}')
             return []
+
+    def get_storage_info(self):
+        try:
+            fs_info = uos.statvfs('/')
+            block_size = fs_info[0]
+            total_blocks = fs_info[2]
+            free_blocks = fs_info[3]
+            
+            total_space = block_size * total_blocks
+            free_space = block_size * free_blocks
+            used_space = total_space - free_space
+            
+            def human_size(size):
+                if size < 1024:
+                    return f"{size} B"
+                elif size < 1024 * 1024:
+                    return f"{size/1024:.1f} KB"
+                else:
+                    return f"{size/(1024*1024):.1f} MB"
+            
+            image_count = sum(1 for filename in uos.listdir('/') 
+                            if filename.lower().endswith('.jpg') and filename != 'temp.jpg')
+            
+            self.last_storage_info = {
+                'total': human_size(total_space),
+                'used': human_size(used_space),
+                'free': human_size(free_space),
+                'images': image_count
+            }
+            return self.last_storage_info
+            
+        except Exception as e:
+            print(f'Storage info error: {e}')
+            self.last_storage_info = {
+                'total': 'Unknown',
+                'used': 'Unknown',
+                'free': 'Unknown',
+                'images': 0
+            }
+            return self.last_storage_info
             
     def set_resolution(self, resolution):
         try:
@@ -190,16 +218,14 @@ class CameraManager:
                 raise Exception("Camera not ready")
                 
             self.cam.resolution = resolution
-            sleep(2)  # Give camera time to adjust
-            
-            # Force a reset after resolution change
+            sleep(2)
             self.reset_camera()
             return True
         except Exception as e:
             print(f'Resolution error: {e}')
             self.reset_camera()
             return False
-
+            
     def set_white_balance(self, mode):
         try:
             print(f"Setting white balance to {mode}")
@@ -207,9 +233,7 @@ class CameraManager:
                 raise Exception("Camera not ready")
                 
             self.cam.set_white_balance(mode)
-            sleep(2)  # Give camera more time to adjust
-            
-            # Force a reset after white balance change
+            sleep(2)
             self.reset_camera()
             return True
         except Exception as e:
@@ -224,9 +248,7 @@ class CameraManager:
                 raise Exception("Camera not ready")
                 
             self.cam.set_brightness_level(int(level))
-            sleep(1)  # Give camera time to adjust
-            
-            # Force a reset after brightness change
+            sleep(1)
             self.reset_camera()
             return True
         except Exception as e:
@@ -241,9 +263,7 @@ class CameraManager:
                 raise Exception("Camera not ready")
                 
             self.cam.set_contrast(int(level))
-            sleep(1)  # Give camera time to adjust
-            
-            # Force a reset after contrast change
+            sleep(1)
             self.reset_camera()
             return True
         except Exception as e:
@@ -258,9 +278,7 @@ class CameraManager:
                 raise Exception("Camera not ready")
                 
             self.cam.set_saturation_control(int(level))
-            sleep(1)  # Give camera time to adjust
-            
-            # Force a reset after saturation change
+            sleep(1)
             self.reset_camera()
             return True
         except Exception as e:
@@ -278,16 +296,14 @@ class CameraManager:
                 self.auto_focus_enabled = self.cam.auto_focus(True)
             else:
                 self.auto_focus_enabled = not self.cam.auto_focus(False)
-            sleep(1)  # Give camera time to adjust
-            
-            # Force a reset after focus change
+            sleep(1)
             self.reset_camera()
             return True
         except Exception as e:
             print(f'Auto focus error: {e}')
             self.reset_camera()
             return False
-            
+
     def trigger_single_focus(self):
         try:
             print("Triggering single focus")
@@ -295,9 +311,7 @@ class CameraManager:
                 raise Exception("Camera not ready")
                 
             result = self.cam.single_focus()
-            sleep(1)  # Give camera time to adjust
-            
-            # Force a reset after focus operation
+            sleep(1)
             self.reset_camera()
             return result
         except Exception as e:
@@ -314,9 +328,8 @@ class CameraManager:
             print(f"Setting fixed focus to 0x{focus_value:04X}")
             self.cam._write_reg(0x30, (focus_value >> 8) & 0xFF)
             self.cam._write_reg(0x31, focus_value & 0xFF)
-            sleep(0.5)  # Give time for the focus position to change
+            sleep(0.5)
 
-            # Verify focus register values
             focus_high = self.cam._read_reg(0x30)
             focus_low = self.cam._read_reg(0x31)
             actual_focus = (int.from_bytes(focus_high, 'big') << 8) | int.from_bytes(focus_low, 'big')
@@ -334,10 +347,9 @@ class CameraManager:
                 
             gain_value = int(gain_value, 16)
             print(f"Setting gain to 0x{gain_value:02X}")
-            self.cam._write_reg(0x45, gain_value)  # Assuming 0x45 is the gain register
-            sleep(0.5)  # Give time for the gain to adjust
+            self.cam._write_reg(0x45, gain_value)
+            sleep(0.5)
             
-            # Verify gain register value
             actual_gain = int.from_bytes(self.cam._read_reg(0x45), 'big')
             print(f"Gain register value set to 0x{actual_gain:02X}")
             
@@ -353,10 +365,9 @@ class CameraManager:
                 
             exposure_value = int(exposure_value, 16)
             print(f"Setting exposure to 0x{exposure_value:02X}")
-            self.cam._write_reg(0x55, exposure_value)  # Assuming 0x55 is the exposure register
-            sleep(0.5)  # Give time for the exposure to adjust
+            self.cam._write_reg(0x55, exposure_value)
+            sleep(0.5)
             
-            # Verify exposure register value
             actual_exposure = int.from_bytes(self.cam._read_reg(0x55), 'big')
             print(f"Exposure register value set to 0x{actual_exposure:02X}")
             
@@ -369,20 +380,18 @@ class CameraManager:
         try:
             settings = {
                 'resolution': self.cam.resolution,
-                'white_balance': self.cam._read_reg(0x42),  # White balance register
-                'brightness': self.cam._read_reg(0x43),     # Brightness register
-                'contrast': self.cam._read_reg(0x44),       # Contrast register
-                'gain': self.cam._read_reg(0x45),          # Gain register
-                'exposure': self.cam._read_reg(0x55)        # Exposure register
+                'white_balance': self.cam._read_reg(0x42),
+                'brightness': self.cam._read_reg(0x43),
+                'contrast': self.cam._read_reg(0x44),
+                'gain': self.cam._read_reg(0x45),
+                'exposure': self.cam._read_reg(0x55)
             }
             
-            # Create presets directory if it doesn't exist
             try:
                 uos.mkdir('presets')
             except:
                 pass
                 
-            # Save settings to file
             filename = f'presets/{preset_name}.txt'
             with open(filename, 'w') as f:
                 for key, value in settings.items():
@@ -399,13 +408,11 @@ class CameraManager:
             filename = f'presets/{preset_name}.txt'
             settings = {}
             
-            # Read settings from file
             with open(filename, 'r') as f:
                 for line in f:
                     key, value = line.strip().split('=')
                     settings[key] = value
                     
-            # Apply settings
             if 'resolution' in settings:
                 self.set_resolution(settings['resolution'])
             if 'brightness' in settings:
@@ -424,65 +431,15 @@ class CameraManager:
             
     def get_saved_presets(self):
         try:
-            presets = []
             try:
                 files = uos.listdir('presets')
             except:
                 return []
                 
-            for file in files:
-                if file.endswith('.txt'):
-                    presets.append(file[:-4])  # Remove .txt extension
-            return presets
+            return [file[:-4] for file in files if file.endswith('.txt')]
         except Exception as e:
             print(f'Get presets error: {e}')
             return []
-            
-    def get_storage_info(self):
-        try:
-            # Get filesystem information
-            fs_info = uos.statvfs('/')
-            block_size = fs_info[0]
-            total_blocks = fs_info[2]
-            free_blocks = fs_info[3]
-            
-            # Calculate sizes in bytes
-            total_space = block_size * total_blocks
-            free_space = block_size * free_blocks
-            used_space = total_space - free_space
-            
-            # Convert to KB since Pico storage is small
-            def human_size(size):
-                if size < 1024:
-                    return f"{size} B"
-                elif size < 1024 * 1024:
-                    return f"{size/1024:.1f} KB"
-                else:
-                    return f"{size/(1024*1024):.1f} MB"  # Max size will be in MB for Pico
-            
-            # Get actual count of jpg files (excluding temp.jpg)
-            image_count = 0
-            try:
-                for filename in uos.listdir('/'):
-                    if filename.lower().endswith('.jpg') and filename != 'temp.jpg':
-                        image_count += 1
-            except:
-                pass
-                
-            return {
-                'total': human_size(total_space),
-                'used': human_size(used_space),
-                'free': human_size(free_space),
-                'images': image_count
-            }
-        except Exception as e:
-            print(f'Storage info error: {e}')
-            return {
-                'total': 'Unknown',
-                'used': 'Unknown',
-                'free': 'Unknown',
-                'images': 0
-            }
 
 def handle_request(client):
     try:
@@ -596,7 +553,11 @@ def handle_request(client):
             send_json(client, presets)
             
         elif path == '/storage_info':
-            info = camera_manager.get_storage_info()
+            if 'refresh=true' in param:
+                info = camera_manager.get_storage_info()
+            else:
+                info = camera_manager.last_storage_info or camera_manager.get_storage_info()
+            
             if info:
                 send_json(client, info)
             else:
