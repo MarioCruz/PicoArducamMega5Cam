@@ -1,8 +1,8 @@
-"""Web template for camera server - Version 0.999"""
+"""Web template for camera server - Version 1.0"""
 
 HTML_PAGE = """<!DOCTYPE html><html>
 <head>
-    <title>Camera Capture v0.9</title>
+    <title>Camera Capture v1.0</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
     <style>
@@ -426,8 +426,9 @@ HTML_PAGE = """<!DOCTYPE html><html>
             addDebugMessage(`${type.toUpperCase()}: ${message}`);
         }
 
-        function updateStorageInfo() {
-            fetch('/storage_info')
+        function updateStorageInfo(forceRefresh = false) {
+            const endpoint = forceRefresh ? '/storage_info?refresh=true' : '/storage_info';
+            fetch(endpoint)
                 .then(response => response.json())
                 .then(data => {
                     const storageDetails = document.getElementById('storage-details');
@@ -558,7 +559,7 @@ HTML_PAGE = """<!DOCTYPE html><html>
             .then(blob => {
                 updateSavedImages();
                 updatePresetList();
-                updateStorageInfo();
+                updateStorageInfo(true); // Force refresh after save
                 const url = URL.createObjectURL(blob);
                 const img = document.getElementById('photo');
                 img.onload = () => {
@@ -581,8 +582,6 @@ HTML_PAGE = """<!DOCTYPE html><html>
         }
 
         function updateSavedImages() {
-            if (busy) return;
-            
             fetch('/saved_images')
                 .then(response => response.json())
                 .then(images => {
@@ -744,14 +743,14 @@ HTML_PAGE = """<!DOCTYPE html><html>
         document.addEventListener('DOMContentLoaded', function() {
             updateSavedImages();
             updatePresetList();
-            updateStorageInfo();
+            updateStorageInfo(true); // Initial load with force refresh
             capture();
 
             setInterval(() => {
                 if (!busy) {
                     updateSavedImages();
                     updatePresetList();
-                    updateStorageInfo();
+                    // Storage info update removed from interval
                 }
             }, 5000);
         });
@@ -760,7 +759,7 @@ HTML_PAGE = """<!DOCTYPE html><html>
 <body>
     <div class="main-container">
         <div class="header">
-            <h1>Camera Capture v0.9</h1>
+            <h1>Camera Capture v1.0</h1>
             <p>Advanced Camera Control Interface</p>
         </div>
 
